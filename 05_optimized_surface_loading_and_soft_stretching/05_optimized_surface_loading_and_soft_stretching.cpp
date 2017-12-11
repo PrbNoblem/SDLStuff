@@ -36,6 +36,8 @@ void close();
 //Loads individual image
 SDL_Surface* loadSurface( std::string path );
 
+SDL_Texture* loadTexture( std::string path );
+
 
 //-------objects------
 //The window we'll be rendering to
@@ -51,41 +53,50 @@ SDL_Surface* gSurfaceToDisplay = NULL;
 
 SDL_Surface* gCurrentPressedSurfaceStretched[4];
 
+SDL_Renderer* gRenderer = NULL;
+
+SDL_Texture* gTexture = NULL;
+
 bool init()
 {
-	//Initialization flag
-	bool success = true;
 
 	//Initialize SDL
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
 	{
 		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
-		success = false;
-	}
-	else
-	{
-		//Create window
-		gWindow = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
-		if( gWindow == NULL )
-		{
-			printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
-			success = false;
-		}
-		else
-		{
-		    //initialize png loading
-		    int imgFlags = IMG_INIT_PNG;
-		    if(!(IMG_Init(imgFlags) & imgFlags))
-            {
-                printf("failed to load png flags!\n");
-                return false;
-            }
-			//Get window surface
-			gScreenSurface = SDL_GetWindowSurface( gWindow );
-		}
+        return false;
 	}
 
-	return success;
+    //Create window
+    gWindow = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
+    if( gWindow == NULL )
+    {
+        printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
+        return false;
+    }
+
+    //create renderer
+    gRenderer = SDL_CreateRenderer( gWindow, -1, SDL_RENDERER_ACCELERATED );
+    if( gRenderer == NULL )
+    {
+        printf( "Renderer could not be created! SDL Error: %s\n", SDL_GetError() );
+        return false;
+    }
+    //Initialize renderer color
+    SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
+
+
+    //initialize png loading
+    int imgFlags = IMG_INIT_PNG;
+    if(!(IMG_Init(imgFlags) & imgFlags))
+    {
+        printf("failed to load png flags!\n");
+        return false;
+    }
+    //Get window surface
+    gScreenSurface = SDL_GetWindowSurface( gWindow );
+
+    return true;
 }
 
 bool loadMedia()
@@ -94,10 +105,10 @@ bool loadMedia()
 	bool success = true;
 
 	//Load stretching surface
-	gStretchedSurface = loadSurface( "05_optimized_surface_loading_and_soft_stretching/stretch.bmp" );
-	if( gStretchedSurface == NULL )
+	gTexture = loadTexture( "05_optimized_surface_loading_and_soft_stretching/texture.png" );
+	if( gTexture == NULL )
 	{
-		printf( "Failed to load stretching image!\n" );
+		printf( "Failed to load texture image!\n" );
 		success = false;
 	}
 
@@ -107,42 +118,46 @@ bool loadMedia()
 void close()
 {
 	//Free loaded image
-	SDL_FreeSurface( gStretchedSurface );
-	gStretchedSurface = NULL;
+	SDL_DestroyTexture( gTexture );
+	gTexture = NULL;
+
+
+	//destroy renderer
+	SDL_DestroyRenderer( gRenderer );
+	gRenderer = NULL;
 
 	//Destroy window
 	SDL_DestroyWindow( gWindow );
 	gWindow = NULL;
 
 	//Quit SDL subsystems
+	IMG_Quit();
 	SDL_Quit();
 }
 
-SDL_Surface* loadSurface( std::string path )
-{
-	//The final optimized image
-	SDL_Surface* optimizedSurface = NULL;
 
-	//Load image at specified path
-	SDL_Surface* loadedSurface = IMG_Load( path.c_str() );
+
+/*
+* Texture loader function, will be used instead of surface loader
+*/
+SDL_Texture* loadTexture( std::string path )
+{
+    SDL_Texture* newTexture = NULL;
+
+    SDL_Surface* loadedSurface = IMG_Load( path.c_str() );
 	if( loadedSurface == NULL )
 	{
 		printf( "Unable to load image %s! SDL Error: %s\n", path.c_str(), IMG_GetError() );
-	}
-	else
-	{
-		//Convert surface to screen format
-		optimizedSurface = SDL_ConvertSurface( loadedSurface, gScreenSurface->format, NULL );
-		if( optimizedSurface == NULL )
-		{
-			printf( "Unable to optimize image %s! SDL Error: %s\n", path.c_str(), SDL_GetError() );
-		}
-
-		//Get rid of old loaded surface
-		SDL_FreeSurface( loadedSurface );
+		return NULL;
 	}
 
-	return optimizedSurface;
+	//Texture is created from surface pixels
+	newTexture = SDL_CreateTextureFromSurface( gRenderer, loadedSurface );
+    if( newTexture == NULL)
+    {
+        printf("Unable to create texture! error: %s\n", SDL_GetError() );
+        return NULL;
+    }
 }
 
 int main( int argc, char* args[] )
@@ -161,11 +176,7 @@ int main( int argc, char* args[] )
         printf( "Failed to load media!\n" );
         exit(1);
     }
-    //load direction images
-    gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_UP] = loadSurface("05_optimized_surface_loading_and_soft_stretching/up.bmp");
-    gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_DOWN] = loadSurface("05_optimized_surface_loading_and_soft_stretching/down.bmp");
-    gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_LEFT] = loadSurface("05_optimized_surface_loading_and_soft_stretching/left.bmp");
-    gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_RIGHT] = loadSurface("05_optimized_surface_loading_and_soft_stretching/right.bmp");
+
 
 
 
@@ -179,45 +190,19 @@ int main( int argc, char* args[] )
 	//While application is running
 	while( !quit )
 	{
-		//Handle events on queue
-		while( SDL_PollEvent( &e ) != 0 )
-		{
-			//User requests quit
-			if( e.type == SDL_QUIT )quit = true;
-                else if(e.type == SDL_KEYDOWN) switch(e.key.keysym.sym)
-                {
-                case SDLK_UP:
-                    gSurfaceToDisplay = gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_UP];
-                    break;
-                case SDLK_DOWN:
-                    gSurfaceToDisplay = gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_DOWN];
-                    break;
-                case SDLK_LEFT:
-                    gSurfaceToDisplay = gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_LEFT];
-                    break;
-                case SDLK_RIGHT:
-                    gSurfaceToDisplay = gCurrentPressedSurfaceStretched[KEY_PRESS_SURFACE_RIGHT];
-                    break;
-                }
-            else gSurfaceToDisplay = gStretchedSurface;
+	    //handle queued events
+	    while( SDL_PollEvent( &e ) != 0)
+        {
+            if(e.type == SDL_QUIT) quit = true;
+        }
 
-		}
-
-		//Apply the image stretched
-		SDL_Rect stretchRect;
-		stretchRect.x = 0;
-		stretchRect.y = 0;
-		stretchRect.w = SCREEN_WIDTH;
-		stretchRect.h = SCREEN_HEIGHT;
-		SDL_BlitScaled( gSurfaceToDisplay, NULL, gScreenSurface, &stretchRect );
-
-		//Update the surface
-		SDL_UpdateWindowSurface( gWindow );
+        //clear
+        SDL_RenderClear( gRenderer );
+        //render texture
+        SDL_RenderCopy( gRenderer, gTexture, NULL, NULL) ;
+        //update
+        SDL_RenderPresent( gRenderer );
 	}
-
-
-
-	//Free resources and close SDL
 	close();
 
 	return 0;
