@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1512999658 source:/home/mevoki/cpp/sdltest/05_optimized_surface_loading_and_soft_stretching/05_optimized_surface_loading_and_soft_stretching.cpp
+	<SDL2/SDL.h>
+	<stdio.h>
+	<string>
+
